@@ -9,7 +9,7 @@ import { config } from '../../config.js';
 const BASE_URL = config.BINANCE_BASE_URL;
 const ORDERBOOK_WEIGHT = 10;      // weight for limit=1000
 const EXCHANGE_INFO_WEIGHT = 20;
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min cache — base URL configurable via BINANCE_BASE_URL env var
 
 async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
   let lastError: unknown;
