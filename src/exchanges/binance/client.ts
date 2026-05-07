@@ -4,8 +4,9 @@ import { RateLimiter } from '../../utils/rateLimiter.js';
 import { logger } from '../../utils/logger.js';
 import { sleep } from '../../utils/sleep.js';
 import { BinanceExchangeInfoSchema, BinanceOrderBookSchema } from './types.js';
+import { config } from '../../config.js';
 
-const BASE_URL = 'https://api.binance.com';
+const BASE_URL = config.BINANCE_BASE_URL;
 const ORDERBOOK_WEIGHT = 10;      // weight for limit=1000
 const EXCHANGE_INFO_WEIGHT = 20;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
