@@ -78,27 +78,27 @@ export class CollectionScheduler {
     const usdtBooks = await this.fetchOrderBooks(exchange, usdtPairs);
     const usdtSummaries = usdtBooks.map((book) => book ? calculateDepthSummaries(book) : null);
 
-    // USDC pairs — fetched only when the exchange supports multi-quote lookup
+    // USDC pairs — disabled until a separate instance is dedicated to this dataset
     const hasMultiQuote = 'getPairsForQuotes' in exchange;
-    const usdcBooks = hasMultiQuote
-      ? await this.fetchOrderBooks(
-          exchange,
-          await (exchange as BinanceClient).getPairsForQuotes(['USDC']),
-        )
-      : [];
-    const usdcSummaries = usdcBooks.map((book) => book ? calculateDepthSummaries(book) : null);
+    // const usdcBooks = hasMultiQuote
+    //   ? await this.fetchOrderBooks(
+    //       exchange,
+    //       await (exchange as BinanceClient).getPairsForQuotes(['USDC']),
+    //     )
+    //   : [];
+    // const usdcSummaries = usdcBooks.map((book) => book ? calculateDepthSummaries(book) : null);
 
     const aggregated = aggregateDepthSummaries(usdtSummaries, exchange.name);
     // const classicAggregated = aggregateClassicDepthSummaries(usdtBooks, usdtSummaries, exchange.name);
     // Combined USDT+USDC set uses the same cumulative depth logic as standard
-    const combinedAggregated = hasMultiQuote
-      ? aggregateDepthSummaries([...usdtSummaries, ...usdcSummaries], `${exchange.name}_usdt_usdc`)
-      : [];
+    // const combinedAggregated = hasMultiQuote
+    //   ? aggregateDepthSummaries([...usdtSummaries, ...usdcSummaries], `${exchange.name}_usdt_usdc`)
+    //   : [];
 
     const rows = [
       ...aggregated.map((s) => ({ ...s, ts })),
       // ...classicAggregated.map((s) => ({ ...s, ts })),
-      ...combinedAggregated.map((s) => ({ ...s, ts })),
+      // ...combinedAggregated.map((s) => ({ ...s, ts })),
     ];
     await insertSnapshots(rows);
 
