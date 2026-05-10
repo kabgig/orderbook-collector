@@ -59,6 +59,55 @@ export function calculateDepthSummaries(
   });
 }
 
+// BTC and ETH are capped at 1% depth in the "classic" dataset to match
+// the original indicator's methodology — their wide order books otherwise
+// dominate and inflate the total beyond real market demand signals
+const CLASSIC_CAP_SYMBOLS = new Set(['BTCUSDT', 'ETHUSDT']);
+const CLASSIC_CAP_FACTOR = 0.01; // 1%
+
+// Aggregate "classic" dataset: BTC+ETH capped at 1%, all other pairs at full depth.
+// Reads pre-computed summaries for regular pairs; recomputes BTC/ETH inline from raw books.
+export function aggregateClassicDepthSummaries(
+  allOrderBooks: Array<OrderBook | null>,
+  pairSummaries: Array<DepthSummary[] | null>,
+  exchange: string,
+  depthLevels: readonly DepthLevel[] = DEPTH_LEVELS
+): DepthSummary[] {
+  const pairCount = pairSummaries.filter(Boolean).length;
+
+  return depthLevels.map((depth_pct) => {
+    let totalBid = 0;
+    let totalAsk = 0;
+
+    for (let i = 0; i < pairSummaries.length; i++) {
+      const summaries = pairSummaries[i];
+      const book = allOrderBooks[i];
+      if (!summaries || !book) continue;
+
+      if (CLASSIC_CAP_SYMBOLS.has(book.symbol)) {
+        // Cap BTC/ETH at 1% — compute directly from the raw order book
+        const midPrice = getMidPrice(book.bids, book.asks);
+        totalBid += sumOrderValue(book.bids, midPrice * (1 - CLASSIC_CAP_FACTOR), midPrice);
+        totalAsk += sumOrderValue(book.asks, midPrice, midPrice * (1 + CLASSIC_CAP_FACTOR));
+      } else {
+        const match = summaries.find((s) => s.depth_pct === depth_pct);
+        if (match) {
+          totalBid += match.total_bid;
+          totalAsk += match.total_ask;
+        }
+      }
+    }
+
+    return {
+      depth_pct,
+      total_bid: totalBid,
+      total_ask: totalAsk,
+      pair_count: pairCount,
+      exchange: `${exchange}_classic`,
+    };
+  });
+}
+
 // Aggregate summaries from all pairs into one total per depth level
 export function aggregateDepthSummaries(
   allPairSummaries: Array<DepthSummary[] | null>,

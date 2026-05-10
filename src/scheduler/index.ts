@@ -1,5 +1,5 @@
 import type { ExchangeClient } from '../exchanges/base/ExchangeClient.js';
-import { calculateDepthSummaries, aggregateDepthSummaries } from '../exchanges/binance/calculator.js';
+import { calculateDepthSummaries, aggregateDepthSummaries, aggregateClassicDepthSummaries } from '../exchanges/binance/calculator.js';
 import { insertSnapshots, cleanupOldSnapshots } from '../db/writer.js';
 import { logger } from '../utils/logger.js';
 import { sleep } from '../utils/sleep.js';
@@ -77,8 +77,12 @@ export class CollectionScheduler {
     );
 
     const aggregated = aggregateDepthSummaries(pairSummaries, exchange.name);
+    const classicAggregated = aggregateClassicDepthSummaries(allOrderBooks, pairSummaries, exchange.name);
 
-    const rows = aggregated.map((s) => ({ ...s, ts }));
+    const rows = [
+      ...aggregated.map((s) => ({ ...s, ts })),
+      ...classicAggregated.map((s) => ({ ...s, ts })),
+    ];
     await insertSnapshots(rows);
 
     const pairsOk = pairSummaries.filter(Boolean).length;

@@ -11,6 +11,10 @@ const ORDERBOOK_WEIGHT = 10;      // weight for limit=1000
 const EXCHANGE_INFO_WEIGHT = 20;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min cache — base URL configurable via BINANCE_BASE_URL env var
 
+// Stablecoin base assets to exclude — their USDT pairs have huge artificial liquidity
+// that inflates order book totals without reflecting real market demand
+const STABLECOIN_BASES = new Set(['USDC', 'TUSD', 'FDUSD', 'USDP', 'DAI', 'BUSD', 'GUSD', 'USDD', 'USTC']);
+
 async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -51,7 +55,7 @@ export class BinanceClient implements ExchangeClient {
     const parsed = BinanceExchangeInfoSchema.parse(json);
 
     const pairs = parsed.symbols
-      .filter((s) => s.status === 'TRADING' && s.quoteAsset === 'USDT')
+      .filter((s) => s.status === 'TRADING' && s.quoteAsset === 'USDT' && !STABLECOIN_BASES.has(s.baseAsset))
       .map((s) => s.symbol);
 
     this.pairsCache = { pairs, fetchedAt: Date.now() };
