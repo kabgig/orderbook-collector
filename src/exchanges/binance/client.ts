@@ -3,6 +3,7 @@ import type { OrderBook } from '../../types/shared.js';
 import { RateLimiter } from '../../utils/rateLimiter.js';
 import { logger } from '../../utils/logger.js';
 import { sleep } from '../../utils/sleep.js';
+import { z } from 'zod';
 import { BinanceExchangeInfoSchema, BinanceOrderBookSchema } from './types.js';
 import { config } from '../../config.js';
 
@@ -37,30 +38,34 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
 export class BinanceClient implements ExchangeClient {
   readonly name = 'binance';
   private rateLimiter = new RateLimiter(6000);
-  private pairsCache: { pairs: string[]; fetchedAt: number } | null = null;
+  // Cache raw symbols — shared across all quote-asset filter calls
+  private symbolsCache: { symbols: z.infer<typeof BinanceExchangeInfoSchema>['symbols']; fetchedAt: number } | null = null;
 
-  async getActivePairs(): Promise<string[]> {
-    if (this.pairsCache && Date.now() - this.pairsCache.fetchedAt < CACHE_TTL_MS) {
-      return this.pairsCache.pairs;
+  private async getSymbols() {
+    if (this.symbolsCache && Date.now() - this.symbolsCache.fetchedAt < CACHE_TTL_MS) {
+      return this.symbolsCache.symbols;
     }
-
     await this.rateLimiter.acquire(EXCHANGE_INFO_WEIGHT);
     const res = await fetchWithRetry(`${BASE_URL}/api/v3/exchangeInfo`);
-
-    if (!res.ok) {
-      throw new Error(`exchangeInfo failed: HTTP ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error(`exchangeInfo failed: HTTP ${res.status}`);
     const json = await res.json() as unknown;
     const parsed = BinanceExchangeInfoSchema.parse(json);
+    this.symbolsCache = { symbols: parsed.symbols, fetchedAt: Date.now() };
+    return parsed.symbols;
+  }
 
-    const pairs = parsed.symbols
-      .filter((s) => s.status === 'TRADING' && s.quoteAsset === 'USDT' && !STABLECOIN_BASES.has(s.baseAsset))
+  // Returns all active trading pairs whose quote asset is in quoteAssets, excluding stablecoin bases
+  async getPairsForQuotes(quoteAssets: string[]): Promise<string[]> {
+    const symbols = await this.getSymbols();
+    const pairs = symbols
+      .filter((s) => s.status === 'TRADING' && quoteAssets.includes(s.quoteAsset) && !STABLECOIN_BASES.has(s.baseAsset))
       .map((s) => s.symbol);
-
-    this.pairsCache = { pairs, fetchedAt: Date.now() };
-    logger.debug({ count: pairs.length }, 'Fetched active pairs');
+    logger.debug({ quoteAssets, count: pairs.length }, 'Fetched active pairs');
     return pairs;
+  }
+
+  async getActivePairs(): Promise<string[]> {
+    return this.getPairsForQuotes(['USDT']);
   }
 
   async getOrderBook(symbol: string): Promise<OrderBook | null> {

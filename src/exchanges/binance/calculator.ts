@@ -59,14 +59,10 @@ export function calculateDepthSummaries(
   });
 }
 
-// BTC and ETH are capped at 1% depth in the "classic" dataset to match
-// the original indicator's methodology — their wide order books otherwise
-// dominate and inflate the total beyond real market demand signals
-const CLASSIC_CAP_SYMBOLS = new Set(['BTCUSDT', 'ETHUSDT']);
-const CLASSIC_CAP_FACTOR = 0.01; // 1%
-
-// Aggregate "classic" dataset: BTC+ETH capped at 1%, all other pairs at full depth.
-// Reads pre-computed summaries for regular pairs; recomputes BTC/ETH inline from raw books.
+// Aggregate "classic" dataset: each depth level captures only the incremental ring
+// between the previous depth boundary and the current one (not cumulative from 0).
+// e.g. depth_pct=5 sums orders strictly between ±3% and ±5% of mid price.
+// All pairs are included with no special treatment.
 export function aggregateClassicDepthSummaries(
   allOrderBooks: Array<OrderBook | null>,
   pairSummaries: Array<DepthSummary[] | null>,
@@ -75,27 +71,28 @@ export function aggregateClassicDepthSummaries(
 ): DepthSummary[] {
   const pairCount = pairSummaries.filter(Boolean).length;
 
-  return depthLevels.map((depth_pct) => {
+  return depthLevels.map((depth_pct, idx) => {
+    const prevDepth = idx === 0 ? 0 : depthLevels[idx - 1]!;
+    const prevFactor = prevDepth / 100;
+    const currentFactor = depth_pct / 100;
+
     let totalBid = 0;
     let totalAsk = 0;
 
-    for (let i = 0; i < pairSummaries.length; i++) {
-      const summaries = pairSummaries[i];
-      const book = allOrderBooks[i];
-      if (!summaries || !book) continue;
+    for (const book of allOrderBooks) {
+      if (!book || book.bids.length === 0 || book.asks.length === 0) continue;
 
-      if (CLASSIC_CAP_SYMBOLS.has(book.symbol)) {
-        // Cap BTC/ETH at 1% — compute directly from the raw order book
-        const midPrice = getMidPrice(book.bids, book.asks);
-        totalBid += sumOrderValue(book.bids, midPrice * (1 - CLASSIC_CAP_FACTOR), midPrice);
-        totalAsk += sumOrderValue(book.asks, midPrice, midPrice * (1 + CLASSIC_CAP_FACTOR));
-      } else {
-        const match = summaries.find((s) => s.depth_pct === depth_pct);
-        if (match) {
-          totalBid += match.total_bid;
-          totalAsk += match.total_ask;
-        }
-      }
+      const bestBid = parseFloat(book.bids[0]![0]);
+      const bestAsk = parseFloat(book.asks[0]![0]);
+      const midPrice = (bestBid + bestAsk) / 2;
+
+      // Skip pairs with a spread wider than 5% — same guard as calculateDepthSummaries
+      if (Math.abs(bestAsk - bestBid) / midPrice > 0.05) continue;
+
+      // Bids in the ring: orders between (mid × (1 - currentFactor)) and (mid × (1 - prevFactor))
+      totalBid += sumOrderValue(book.bids, midPrice * (1 - currentFactor), midPrice * (1 - prevFactor));
+      // Asks in the ring: orders between (mid × (1 + prevFactor)) and (mid × (1 + currentFactor))
+      totalAsk += sumOrderValue(book.asks, midPrice * (1 + prevFactor), midPrice * (1 + currentFactor));
     }
 
     return {
