@@ -102,8 +102,8 @@ export class CollectionScheduler {
     ];
     await insertSnapshots(rows);
 
-    const totalOk = [...usdtSummaries, ...usdcSummaries].filter(Boolean).length;
-    const totalSkipped = usdtSummaries.length + usdcSummaries.length - totalOk;
+    const totalOk = usdtSummaries.filter(Boolean).length;
+    const totalSkipped = usdtSummaries.length - totalOk;
 
     logger.info({
       event: 'cycle_complete',
