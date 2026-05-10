@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(npx tsc --noEmit *)"
     ]
   }
 }
