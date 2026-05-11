@@ -7,6 +7,9 @@ try {
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  // Controls which dataset this instance collects — one instance per dataset
+  // Valid values: binance | binance_usdt_usdc | binance_classic
+  DATASET: z.enum(['binance', 'binance_usdt_usdc', 'binance_classic']),
   COLLECTION_INTERVAL_MS: z.coerce.number().default(60_000),
   BATCH_SIZE: z.coerce.number().default(80),
   BATCH_DELAY_MS: z.coerce.number().default(500),

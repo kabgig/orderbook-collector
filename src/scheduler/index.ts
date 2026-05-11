@@ -72,41 +72,35 @@ export class CollectionScheduler {
   private async runExchangeCycle(exchange: ExchangeClient): Promise<void> {
     const cycleStart = Date.now();
     const ts = new Date();
+    const dataset = config.DATASET;
 
-    // USDT pairs — used for standard and classic sets
-    const usdtPairs = await exchange.getActivePairs();
-    const usdtBooks = await this.fetchOrderBooks(exchange, usdtPairs);
-    const usdtSummaries = usdtBooks.map((book) => book ? calculateDepthSummaries(book) : null);
+    // Fetch pairs and order books based on the configured dataset
+    let allBooks: Array<ReturnType<ExchangeClient['getOrderBook']> extends Promise<infer T> ? T : never>;
+    if (dataset === 'binance_usdt_usdc') {
+      const pairs = await (exchange as BinanceClient).getPairsForQuotes(['USDT', 'USDC']);
+      allBooks = await this.fetchOrderBooks(exchange, pairs);
+    } else {
+      // binance and binance_classic both use USDT pairs only
+      const pairs = await exchange.getActivePairs();
+      allBooks = await this.fetchOrderBooks(exchange, pairs);
+    }
 
-    // USDC pairs — disabled until a separate instance is dedicated to this dataset
-    const hasMultiQuote = 'getPairsForQuotes' in exchange;
-    // const usdcBooks = hasMultiQuote
-    //   ? await this.fetchOrderBooks(
-    //       exchange,
-    //       await (exchange as BinanceClient).getPairsForQuotes(['USDC']),
-    //     )
-    //   : [];
-    // const usdcSummaries = usdcBooks.map((book) => book ? calculateDepthSummaries(book) : null);
+    const summaries = allBooks.map((book) => book ? calculateDepthSummaries(book) : null);
 
-    const aggregated = aggregateDepthSummaries(usdtSummaries, exchange.name);
-    // const classicAggregated = aggregateClassicDepthSummaries(usdtBooks, usdtSummaries, exchange.name);
-    // Combined USDT+USDC set uses the same cumulative depth logic as standard
-    // const combinedAggregated = hasMultiQuote
-    //   ? aggregateDepthSummaries([...usdtSummaries, ...usdcSummaries], `${exchange.name}_usdt_usdc`)
-    //   : [];
+    const aggregated =
+      dataset === 'binance_classic'
+        ? aggregateClassicDepthSummaries(allBooks, summaries, exchange.name)
+        : aggregateDepthSummaries(summaries, dataset);
 
-    const rows = [
-      ...aggregated.map((s) => ({ ...s, ts })),
-      // ...classicAggregated.map((s) => ({ ...s, ts })),
-      // ...combinedAggregated.map((s) => ({ ...s, ts })),
-    ];
+    const rows = aggregated.map((s) => ({ ...s, ts }));
     await insertSnapshots(rows);
 
-    const totalOk = usdtSummaries.filter(Boolean).length;
-    const totalSkipped = usdtSummaries.length - totalOk;
+    const totalOk = summaries.filter(Boolean).length;
+    const totalSkipped = summaries.length - totalOk;
 
     logger.info({
       event: 'cycle_complete',
+      dataset,
       exchange: exchange.name,
       duration_ms: Date.now() - cycleStart,
       pairs_ok: totalOk,
