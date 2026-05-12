@@ -1,5 +1,5 @@
 // Depth levels as const — used across all exchanges
-export const DEPTH_LEVELS = [1.5, 3, 5, 8, 15, 30, 60] as const;
+export const DEPTH_LEVELS = [1, 1.5, 3, 5, 8, 15, 30, 60] as const;
 export type DepthLevel = (typeof DEPTH_LEVELS)[number];
 
 // Normalized order book — same shape regardless of exchange
