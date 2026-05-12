@@ -16,11 +16,12 @@ export const BybitInstrumentsResponseSchema = z.object({
 });
 
 // Bybit orderbook entries: [price, qty]
+// result fields are optional — error responses return retCode != 0 with empty result {}
 export const BybitOrderBookResponseSchema = z.object({
   retCode: z.number(),
   result: z.object({
-    s: z.string(),                                  // symbol
-    b: z.array(z.tuple([z.string(), z.string()])),  // bids
-    a: z.array(z.tuple([z.string(), z.string()])),  // asks
+    s: z.string().optional(),
+    b: z.array(z.tuple([z.string(), z.string()])).optional(),
+    a: z.array(z.tuple([z.string(), z.string()])).optional(),
   }),
 });

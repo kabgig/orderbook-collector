@@ -99,16 +99,23 @@ export class BybitClient implements ExchangeClient {
     const json = await res.json() as unknown;
     const parseResult = BybitOrderBookResponseSchema.safeParse(json);
     if (!parseResult.success) {
-      logger.warn({ symbol, error: parseResult.error.message }, 'Bybit: order book schema validation failed');
+      logger.warn({ symbol, error: parseResult.error.issues }, 'Bybit: order book schema validation failed');
       return null;
     }
 
+    // Non-zero retCode means the symbol is unavailable/delisted — skip silently
     if (parseResult.data.retCode !== 0) {
-      logger.warn({ symbol, retCode: parseResult.data.retCode }, 'Bybit: error response for order book');
+      logger.debug({ symbol, retCode: parseResult.data.retCode }, 'Bybit: skipping symbol with non-zero retCode');
       return null;
     }
 
-    const { b: bids, a: asks } = parseResult.data.result;
+    const { s, b: bids, a: asks } = parseResult.data.result;
+    // Guard against a 0 retCode but still-empty result (shouldn't happen, but be safe)
+    if (!s || !bids || !asks) {
+      logger.warn({ symbol }, 'Bybit: retCode=0 but result fields missing');
+      return null;
+    }
+
     return {
       symbol,
       bids,
