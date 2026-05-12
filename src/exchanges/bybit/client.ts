@@ -36,14 +36,14 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<Response> {
 export class BybitClient implements ExchangeClient {
   readonly name = 'bybit';
   private rateLimiter = new RateLimiter(RATE_LIMIT_PER_MIN);
-  private instrumentsCache: { instruments: Array<{ symbol: string; baseCoin: string; quoteCoin: string }>; fetchedAt: number } | null = null;
+  private instrumentsCache: { instruments: Array<{ symbol: string; baseCoin: string; quoteCoin: string; status: string }>; fetchedAt: number } | null = null;
 
   private async getInstruments() {
     if (this.instrumentsCache && Date.now() - this.instrumentsCache.fetchedAt < CACHE_TTL_MS) {
       return this.instrumentsCache.instruments;
     }
     // Bybit paginates with cursor — fetch all pages
-    const all: Array<{ symbol: string; baseCoin: string; quoteCoin: string }> = [];
+    const all: Array<{ symbol: string; baseCoin: string; quoteCoin: string; status: string }> = [];
     let cursor: string | undefined;
     do {
       await this.rateLimiter.acquire(1);
