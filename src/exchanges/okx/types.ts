@@ -17,9 +17,10 @@ const OKXOrderEntry = z.tuple([z.string(), z.string(), z.string(), z.string()]);
 
 export const OKXOrderBookResponseSchema = z.object({
   code: z.string(),
+  // data is absent on error responses (e.g. instrument unavailable)
   data: z.array(z.object({
     asks: z.array(OKXOrderEntry),
     bids: z.array(OKXOrderEntry),
     ts: z.string(),
-  })),
+  })).optional(),
 });

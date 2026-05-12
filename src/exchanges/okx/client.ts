@@ -95,7 +95,7 @@ export class OKXClient implements ExchangeClient {
       return null;
     }
 
-    if (parseResult.data.code !== '0' || parseResult.data.data.length === 0) {
+    if (parseResult.data.code !== '0' || !parseResult.data.data?.length) {
       logger.warn({ symbol, code: parseResult.data.code }, 'OKX: empty or error response');
       return null;
     }
