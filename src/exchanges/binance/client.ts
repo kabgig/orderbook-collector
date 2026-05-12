@@ -47,6 +47,13 @@ export class BinanceClient implements ExchangeClient {
     }
     await this.rateLimiter.acquire(EXCHANGE_INFO_WEIGHT);
     const res = await fetchWithRetry(`${BASE_URL}/api/v3/exchangeInfo`);
+    // Calibrate local weight from Binance's actual counter — critical on process startup
+    this.rateLimiter.syncFromHeader(res.headers.get('X-MBX-USED-WEIGHT-1M'));
+    if (res.status === 418) {
+      logger.fatal('IP banned by Binance (418) during exchangeInfo — waiting 10 min before exit');
+      await sleep(10 * 60 * 1000);
+      throw new Error('Binance IP ban (418)');
+    }
     if (!res.ok) throw new Error(`exchangeInfo failed: HTTP ${res.status}`);
     const json = await res.json() as unknown;
     const parsed = BinanceExchangeInfoSchema.parse(json);
