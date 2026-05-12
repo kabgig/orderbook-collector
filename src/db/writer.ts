@@ -1,22 +1,33 @@
 import { sql } from './client.js';
 import type { SnapshotRow } from '../types/shared.js';
 
-// Insert all depth-level rows in a single query
+const TABLES = ['orderbook_snapshots', 'okx_orderbook_snapshots', 'bybit_orderbook_snapshots'] as const;
+
+// Derive table name from the exchange field of the first row
+function tableForExchange(exchange: string): string {
+  if (exchange.startsWith('okx')) return 'okx_orderbook_snapshots';
+  if (exchange.startsWith('bybit')) return 'bybit_orderbook_snapshots';
+  return 'orderbook_snapshots';
+}
+
+// Insert all depth-level rows in a single query to the exchange-specific table
 export async function insertSnapshots(rows: SnapshotRow[]): Promise<void> {
   if (rows.length === 0) return;
+  const table = tableForExchange(rows[0]!.exchange);
   await sql`
-    INSERT INTO orderbook_snapshots
+    INSERT INTO ${sql(table)}
       ${sql(rows, 'ts', 'depth_pct', 'total_bid', 'total_ask', 'pair_count', 'exchange')}
   `;
 }
 
-// Delete rows older than retentionDays (default 90)
-// Returns number of deleted rows
+// Delete rows older than retentionDays from all snapshot tables (default 90)
+// Returns total number of deleted rows across all tables
 export async function cleanupOldSnapshots(retentionDays = 90): Promise<number> {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-  const result = await sql`
-    DELETE FROM orderbook_snapshots
-    WHERE ts < ${cutoff}
-  `;
-  return result.count;
+  let total = 0;
+  for (const table of TABLES) {
+    const result = await sql`DELETE FROM ${sql(table)} WHERE ts < ${cutoff}`;
+    total += result.count;
+  }
+  return total;
 }

@@ -1,5 +1,4 @@
 import type { ExchangeClient } from '../exchanges/base/ExchangeClient.js';
-import type { BinanceClient } from '../exchanges/binance/client.js';
 import { calculateDepthSummaries, aggregateDepthSummaries, aggregateClassicDepthSummaries } from '../exchanges/binance/calculator.js';
 import { insertSnapshots, cleanupOldSnapshots } from '../db/writer.js';
 import { logger } from '../utils/logger.js';
@@ -74,23 +73,18 @@ export class CollectionScheduler {
     const ts = new Date();
     const dataset = config.DATASET;
 
-    // Fetch pairs and order books based on the configured dataset
-    let allBooks: Array<ReturnType<ExchangeClient['getOrderBook']> extends Promise<infer T> ? T : never>;
-    if (dataset === 'binance_usdt_usdc') {
-      const pairs = await (exchange as BinanceClient).getPairsForQuotes(['USDT', 'USDC']);
-      allBooks = await this.fetchOrderBooks(exchange, pairs);
-    } else {
-      // binance and binance_classic both use USDT pairs only
-      const pairs = await exchange.getActivePairs();
-      allBooks = await this.fetchOrderBooks(exchange, pairs);
-    }
+    // Fetch pairs based on dataset suffix — all exchange clients implement getPairsForQuotes
+    const pairs = dataset.endsWith('_usdt_usdc')
+      ? await exchange.getPairsForQuotes(['USDT', 'USDC'])
+      : await exchange.getActivePairs();
+
+    const allBooks = await this.fetchOrderBooks(exchange, pairs);
 
     const summaries = allBooks.map((book) => book ? calculateDepthSummaries(book) : null);
 
-    const aggregated =
-      dataset === 'binance_classic'
-        ? aggregateClassicDepthSummaries(allBooks, summaries, exchange.name)
-        : aggregateDepthSummaries(summaries, dataset);
+    const aggregated = dataset.endsWith('_classic')
+      ? aggregateClassicDepthSummaries(allBooks, summaries, exchange.name)
+      : aggregateDepthSummaries(summaries, dataset);
 
     const rows = aggregated.map((s) => ({ ...s, ts }));
     await insertSnapshots(rows);

@@ -1,7 +1,10 @@
 import { BinanceClient } from './exchanges/binance/client.js';
+import { OKXClient } from './exchanges/okx/client.js';
+import { BybitClient } from './exchanges/bybit/client.js';
 import { CollectionScheduler } from './scheduler/index.js';
 import { sql } from './db/client.js';
 import { logger } from './utils/logger.js';
+import { config } from './config.js';
 
 async function main() {
   logger.info('orderbook-collector starting...');
@@ -10,11 +13,12 @@ async function main() {
   await sql`SELECT 1`;
   logger.info('Database connected ✓');
 
-  const exchanges = [
-    new BinanceClient(),
-    // new BybitClient(),   ← add here later
-    // new OKXClient(),     ← add here later
-  ];
+  const dataset = config.DATASET;
+  const client = dataset.startsWith('okx') ? new OKXClient()
+    : dataset.startsWith('bybit') ? new BybitClient()
+    : new BinanceClient();
+
+  const exchanges = [client];
 
   const scheduler = new CollectionScheduler(exchanges);
 
