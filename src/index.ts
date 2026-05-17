@@ -19,6 +19,11 @@ async function main() {
   const dbInfo = await sql<{ db: string; user: string }[]>`SELECT current_database() AS db, current_user AS user`;
   logger.info({ url_host: urlHost, db: dbInfo[0]?.db, user: dbInfo[0]?.user }, 'Database connected ✓');
 
+  // Log the public egress IP of this instance — so we can verify each Railway/VPS
+  // deployment uses a distinct IP (otherwise Binance per-IP rate limits collapse all instances).
+  // Fire-and-forget with a short timeout so a flaky IP-echo service can't block startup.
+  void logEgressIp();
+
   const dataset = config.DATASET;
   const client = dataset.startsWith('okx') ? new OKXClient()
     : dataset.startsWith('bybit') ? new BybitClient()
@@ -38,6 +43,24 @@ async function main() {
   process.on('SIGINT', shutdown);
 
   await scheduler.start();
+}
+
+async function logEgressIp(): Promise<void> {
+  const ac = new AbortController();
+  const timeout = setTimeout(() => ac.abort(), 5000);
+  try {
+    // Two-endpoint race so a single provider outage doesn't blank the log
+    const res = await Promise.any([
+      fetch('https://api.ipify.org?format=json', { signal: ac.signal }).then((r) => r.json() as Promise<{ ip: string }>),
+      fetch('https://ifconfig.me/all.json', { signal: ac.signal }).then((r) => r.json() as Promise<{ ip_addr: string }>),
+    ]);
+    const ip = (res as { ip?: string; ip_addr?: string }).ip ?? (res as { ip_addr?: string }).ip_addr;
+    logger.info({ egress_ip: ip, dataset: config.DATASET }, `Egress IP: ${ip} (dataset=${config.DATASET})`);
+  } catch (err) {
+    logger.warn({ err }, 'Could not determine egress IP (continuing anyway)');
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 main().catch((err: unknown) => {
