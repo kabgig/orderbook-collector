@@ -9,9 +9,15 @@ import { config } from './config.js';
 async function main() {
   logger.info('orderbook-collector starting...');
 
-  // Verify DB connection before starting loop
+  // Log which Neon project/host this process actually connects to.
+  // Parsed from the DATABASE_URL the schema resolved (after env+`.env` merge),
+  // so a stale shell-exported URL becomes obvious instead of silently winning.
+  const urlHost = (() => {
+    try { return new URL(config.DATABASE_URL).host; } catch { return '<unparseable>'; }
+  })();
   await sql`SELECT 1`;
-  logger.info('Database connected ✓');
+  const dbInfo = await sql<{ db: string; user: string }[]>`SELECT current_database() AS db, current_user AS user`;
+  logger.info({ url_host: urlHost, db: dbInfo[0]?.db, user: dbInfo[0]?.user }, 'Database connected ✓');
 
   const dataset = config.DATASET;
   const client = dataset.startsWith('okx') ? new OKXClient()
