@@ -27,6 +27,12 @@ const schema = z.object({
   BINANCE_BASE_URL: z.string().url().default('https://api.binance.com'),
   OKX_BASE_URL: z.string().url().default('https://www.okx.com'),
   BYBIT_BASE_URL: z.string().url().default('https://api.bybit.com'),
+  // Enables the daily BTC-correlation update service on THIS instance only.
+  // Set to true on exactly one Railway/VPS instance across the whole fleet; the DB-level
+  // lock (dataset_fetch_locks) provides a second line of defence if accidentally enabled on >1.
+  // Independent of DATASET — the correlation service always hits Binance regardless of which
+  // exchange this instance aggregates, so OKX/Bybit instances are equally fine to host it.
+  CORRELATION_UPDATES_ENABLED: z.coerce.boolean().default(false),
 });
 
 const parsed = schema.safeParse(process.env);

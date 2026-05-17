@@ -18,3 +18,29 @@ export const BinanceOrderBookSchema = z.object({
 });
 
 export type BinanceOrderBook = z.infer<typeof BinanceOrderBookSchema>;
+
+// Binance /api/v3/klines response: an array of 12-element arrays.
+// We only consume openTime (index 0) and close price (index 4); the rest are ignored.
+// Schema validates the tuple length and the two fields we read.
+export const BinanceKlineSchema = z.tuple([
+  z.number(),  // openTime (ms)
+  z.string(),  // open
+  z.string(),  // high
+  z.string(),  // low
+  z.string(),  // close
+  z.string(),  // volume
+  z.number(),  // closeTime (ms)
+  z.string(),  // quoteAssetVolume
+  z.number(),  // numberOfTrades
+  z.string(),  // takerBuyBaseVolume
+  z.string(),  // takerBuyQuoteVolume
+  z.string(),  // ignore
+]);
+
+export const BinanceKlinesSchema = z.array(BinanceKlineSchema);
+
+// Minimal candle shape consumed by the correlation service: timestamp + close price.
+export interface KlineCandle {
+  openTime: number;
+  close: number;
+}

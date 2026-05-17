@@ -2,6 +2,7 @@ import { BinanceClient } from './exchanges/binance/client.js';
 import { OKXClient } from './exchanges/okx/client.js';
 import { BybitClient } from './exchanges/bybit/client.js';
 import { CollectionScheduler } from './scheduler/index.js';
+import { startCorrelationService, stopCorrelationService } from './correlation/scheduler.js';
 import { sql } from './db/client.js';
 import { logger } from './utils/logger.js';
 import { config } from './config.js';
@@ -33,9 +34,22 @@ async function main() {
 
   const scheduler = new CollectionScheduler(exchanges);
 
+  // Optionally start the correlation update service in parallel.
+  // Fire-and-forget — fully isolated from the aggregation scheduler; failures here
+  // never affect orderbook collection. Enable on exactly one instance fleet-wide.
+  if (config.CORRELATION_UPDATES_ENABLED) {
+    logger.info('CORRELATION_UPDATES_ENABLED=true — launching correlation service in parallel');
+    void startCorrelationService().catch((err: unknown) => {
+      logger.error({ err }, 'correlation service crashed (aggregation continues)');
+    });
+  } else {
+    logger.info('CORRELATION_UPDATES_ENABLED=false — correlation service not running on this instance');
+  }
+
   const shutdown = async () => {
     logger.info('Shutdown signal received');
     scheduler.stop();
+    stopCorrelationService();
     await sql.end();
     process.exit(0);
   };
