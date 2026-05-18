@@ -1,7 +1,8 @@
 import type { ExchangeClient } from '../exchanges/base/ExchangeClient.js';
 import { calculateDepthSummaries, aggregateDepthSummaries, aggregateClassicDepthSummaries } from '../exchanges/binance/calculator.js';
-import { insertSnapshots, cleanupOldSnapshots } from '../db/writer.js';
+import { insertSnapshots } from '../db/writer.js';
 import { tryClaimFetchSlot } from '../db/coordination.js';
+import { getCorrelatedSymbols } from '../db/correlatedPairs.js';
 import { logger } from '../utils/logger.js';
 import { sleep } from '../utils/sleep.js';
 import { config } from '../config.js';
@@ -9,7 +10,6 @@ import { config } from '../config.js';
 export class CollectionScheduler {
   private stopRequested = false;
   private cycleCount = 0;
-  private lastCleanup = Date.now();
 
   constructor(private readonly exchanges: ExchangeClient[]) {}
 
@@ -48,13 +48,6 @@ export class CollectionScheduler {
         );
       }
     });
-
-    // Daily cleanup
-    if (Date.now() - this.lastCleanup > 24 * 60 * 60 * 1000) {
-      const deleted = await cleanupOldSnapshots();
-      logger.info({ deleted }, 'Old snapshots cleaned up');
-      this.lastCleanup = Date.now();
-    }
   }
 
   private async fetchOrderBooks(exchange: ExchangeClient, pairs: string[]) {
@@ -133,10 +126,26 @@ export class CollectionScheduler {
     // ts is captured AFTER the claim so the row timestamp matches the actual fetch start.
     const ts = new Date();
 
-    // Fetch pairs based on dataset suffix — all exchange clients implement getPairsForQuotes
-    const pairs = dataset.endsWith('_usdt_usdc')
-      ? await exchange.getPairsForQuotes(['USDT', 'USDC'])
-      : await exchange.getActivePairs();
+    // Fetch pairs based on dataset suffix — all exchange clients implement getPairsForQuotes.
+    // For 'binance_correlated': intersect the active Binance USDT universe with the set of
+    // symbols whose stored BTC correlation is > 0 (missing rows are excluded by definition).
+    let pairs: string[];
+    if (dataset === 'binance_correlated') {
+      const activePairs = await exchange.getActivePairs();
+      const correlatedSet = new Set(await getCorrelatedSymbols());
+      pairs = activePairs.filter((p) => correlatedSet.has(p));
+      logger.info({
+        dataset,
+        exchange: exchange.name,
+        active: activePairs.length,
+        correlated_universe: correlatedSet.size,
+        intersected: pairs.length,
+      }, 'Correlated pair set resolved');
+    } else if (dataset.endsWith('_usdt_usdc')) {
+      pairs = await exchange.getPairsForQuotes(['USDT', 'USDC']);
+    } else {
+      pairs = await exchange.getActivePairs();
+    }
 
     const allBooks = await this.fetchOrderBooks(exchange, pairs);
 

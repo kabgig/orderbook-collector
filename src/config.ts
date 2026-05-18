@@ -9,7 +9,7 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   // Controls which dataset this instance collects — one instance per dataset
   DATASET: z.enum([
-    'binance', 'binance_usdt_usdc', 'binance_classic',
+    'binance', 'binance_usdt_usdc', 'binance_classic', 'binance_correlated',
     'okx', 'okx_usdt_usdc', 'okx_classic',
     'bybit', 'bybit_usdt_usdc', 'bybit_classic',
   ]),

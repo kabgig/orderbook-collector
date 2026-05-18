@@ -31,7 +31,7 @@ import {
 } from './writer.js';
 
 const INTERVAL = '1h';
-const HISTORY_DAYS = 90;
+const HISTORY_DAYS = 45;
 const HISTORY_MS = HISTORY_DAYS * 24 * 60 * 60 * 1000;
 // Minimum candles required to compute a meaningful correlation.
 // 7 days * 24 hourly candles = 168; we round up to 180 for a small safety buffer.
